@@ -37,6 +37,9 @@ export default api;
 export const login = (username, password) =>
   api.post('/auth/login', { username, password });
 
+export const signup = (username, email, password, phone) =>
+  api.post('/auth/signup', { username, email, password, phone });
+
 export const getMe = () => api.get('/auth/me');
 
 // ── Servers ──────────────────────────────────────────────────────────────

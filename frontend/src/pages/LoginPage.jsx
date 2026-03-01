@@ -1,22 +1,43 @@
 import React, { useState } from 'react';
-import { login } from '../services/api';
+import { login, signup } from '../services/api';
 import toast from 'react-hot-toast';
 
 export default function LoginPage({ onLogin }) {
+  const [mode, setMode] = useState('login'); // 'login' | 'signup'
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
 
+  const switchMode = (m) => {
+    setMode(m);
+    setUsername(''); setEmail(''); setPhone('');
+    setPassword(''); setConfirmPassword('');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (mode === 'signup' && password !== confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
     setLoading(true);
     try {
-      const res = await login(username, password);
-      onLogin(res.data.access_token);
-      toast.success('Logged in');
-    } catch {
-      toast.error('Invalid credentials');
+      if (mode === 'login') {
+        const res = await login(username, password);
+        onLogin(res.data.access_token);
+        toast.success('Logged in');
+      } else {
+        const res = await signup(username, email, password, phone || null);
+        onLogin(res.data.access_token);
+        toast.success('Account created! Welcome, ' + username);
+      }
+    } catch (err) {
+      const msg = err?.response?.data?.detail;
+      toast.error(msg || (mode === 'login' ? 'Invalid credentials' : 'Signup failed'));
     } finally {
       setLoading(false);
     }
@@ -195,6 +216,28 @@ export default function LoginPage({ onLogin }) {
       fontSize: '0.7rem',
       color: '#475569',
     },
+    tabs: {
+      display: 'flex',
+      background: 'rgba(15,23,42,0.5)',
+      borderRadius: 12,
+      padding: 4,
+      marginBottom: 24,
+      gap: 4,
+    },
+    tab: (active) => ({
+      flex: 1,
+      padding: '9px 0',
+      background: active ? 'linear-gradient(135deg, #3b82f6, #6366f1)' : 'transparent',
+      border: 'none',
+      borderRadius: 9,
+      color: active ? '#fff' : '#94a3b8',
+      fontSize: '0.875rem',
+      fontWeight: active ? 600 : 400,
+      cursor: 'pointer',
+      transition: 'all 0.2s ease',
+      fontFamily: 'inherit',
+      boxShadow: active ? '0 2px 12px rgba(59,130,246,0.3)' : 'none',
+    }),
   };
 
   return (
@@ -208,15 +251,14 @@ export default function LoginPage({ onLogin }) {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
+        input::placeholder { color: #475569; }
       `}</style>
 
       <div style={styles.wrapper}>
-        {/* Background blobs */}
         <div style={styles.blob1} />
         <div style={styles.blob2} />
         <div style={styles.blob3} />
 
-        {/* Card */}
         <div style={styles.card}>
           {/* Logo */}
           <div style={styles.logoBox}>
@@ -225,7 +267,15 @@ export default function LoginPage({ onLogin }) {
             </svg>
           </div>
           <h1 style={styles.title}>Server Monitor</h1>
-          <p style={styles.subtitle}>Sign in to your dashboard</p>
+          <p style={styles.subtitle}>
+            {mode === 'login' ? 'Sign in to your dashboard' : 'Create a viewer account'}
+          </p>
+
+          {/* Mode tabs */}
+          <div style={styles.tabs}>
+            <button type="button" style={styles.tab(mode === 'login')} onClick={() => switchMode('login')}>Sign In</button>
+            <button type="button" style={styles.tab(mode === 'signup')} onClick={() => switchMode('signup')}>Sign Up</button>
+          </div>
 
           {/* Form */}
           <form onSubmit={handleSubmit}>
@@ -250,6 +300,48 @@ export default function LoginPage({ onLogin }) {
               />
             </div>
 
+            {/* Email — signup only */}
+            {mode === 'signup' && (
+              <>
+                <label style={styles.label}>EMAIL</label>
+                <div style={styles.inputWrapper}>
+                  <div style={styles.iconBox}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0-9.75 6.75L2.25 6.75" />
+                    </svg>
+                  </div>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    onFocus={() => setFocusedField('email')}
+                    onBlur={() => setFocusedField(null)}
+                    required
+                    placeholder="you@example.com"
+                    style={styles.input(focusedField === 'email')}
+                  />
+                </div>
+
+                <label style={styles.label}>PHONE (optional)</label>
+                <div style={styles.inputWrapper}>
+                  <div style={styles.iconBox}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 0 0 2.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 0 1-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 0 0-1.091-.852H4.5A2.25 2.25 0 0 0 2.25 4.5v2.25Z" />
+                    </svg>
+                  </div>
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    onFocus={() => setFocusedField('phone')}
+                    onBlur={() => setFocusedField(null)}
+                    placeholder="+1 555 000 0000"
+                    style={styles.input(focusedField === 'phone')}
+                  />
+                </div>
+              </>
+            )}
+
             {/* Password */}
             <label style={styles.label}>PASSWORD</label>
             <div style={styles.inputWrapper}>
@@ -265,10 +357,41 @@ export default function LoginPage({ onLogin }) {
                 onFocus={() => setFocusedField('pass')}
                 onBlur={() => setFocusedField(null)}
                 required
-                placeholder="Enter password"
+                placeholder={mode === 'signup' ? 'Min 6 characters' : 'Enter password'}
                 style={styles.input(focusedField === 'pass')}
               />
             </div>
+
+            {/* Confirm password — signup only */}
+            {mode === 'signup' && (
+              <>
+                <label style={styles.label}>CONFIRM PASSWORD</label>
+                <div style={styles.inputWrapper}>
+                  <div style={styles.iconBox}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
+                    </svg>
+                  </div>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    onFocus={() => setFocusedField('confirm')}
+                    onBlur={() => setFocusedField(null)}
+                    required
+                    placeholder="Re-enter password"
+                    style={{
+                      ...styles.input(focusedField === 'confirm'),
+                      borderColor: confirmPassword && password !== confirmPassword
+                        ? 'rgba(239,68,68,0.7)'
+                        : focusedField === 'confirm'
+                        ? 'rgba(59,130,246,0.6)'
+                        : 'rgba(71,85,105,0.5)',
+                    }}
+                  />
+                </div>
+              </>
+            )}
 
             {/* Submit */}
             <button type="submit" disabled={loading} style={styles.button}>
@@ -278,10 +401,10 @@ export default function LoginPage({ onLogin }) {
                     <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />
                     <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" opacity="0.75" />
                   </svg>
-                  Signing in…
+                  {mode === 'login' ? 'Signing in…' : 'Creating account…'}
                 </>
               ) : (
-                'Sign In'
+                mode === 'login' ? 'Sign In' : 'Create Account'
               )}
             </button>
           </form>

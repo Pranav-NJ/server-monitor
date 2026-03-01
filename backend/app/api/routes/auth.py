@@ -30,9 +30,30 @@ async def login(body: LoginRequest):
     return TokenResponse(access_token=token)
 
 
+@router.post("/signup", status_code=status.HTTP_201_CREATED)
+async def signup(body: RegisterUserRequest):
+    """
+    Public self-registration — always creates a Viewer (role_id=2) account.
+    No JWT required. Admins use /register (auth required) to set any role.
+    """
+    hashed = hash_password(body.password)
+    try:
+        user_id = await execute_insert(
+            "INSERT INTO Users (username, email, password_hash, phone, role_id) "
+            "VALUES (%s, %s, %s, %s, %s)",
+            (body.username, body.email, hashed, body.phone, 2),  # force viewer role
+        )
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username or email already exists")
+
+    # Auto-login: return a token straight away
+    token = create_access_token(data={"sub": user_id})
+    return {"user_id": user_id, "username": body.username, "access_token": token, "token_type": "bearer"}
+
+
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(body: RegisterUserRequest, current_user: dict = Depends(get_current_user)):
-    # Only admins (role_id=1) may create users
+    # Only admins (role_id=1) may create users with a custom role
     if current_user["role_id"] != 1:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
