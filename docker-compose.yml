@@ -1,0 +1,77 @@
+version: "3.9"
+
+services:
+  # ── MySQL ──────────────────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: sm-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: server_monitor
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/001_schema.sql:/docker-entrypoint-initdb.d/001_schema.sql
+      - ./database/002_triggers.sql:/docker-entrypoint-initdb.d/002_triggers.sql
+      - ./database/003_procedures.sql:/docker-entrypoint-initdb.d/003_procedures.sql
+      - ./database/004_seed.sql:/docker-entrypoint-initdb.d/004_seed.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD:-rootpassword}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── FastAPI Backend ────────────────────────────────────────────────────
+  backend:
+    build: ./backend
+    container_name: sm-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: ${DB_PASSWORD:-rootpassword}
+      DB_NAME: server_monitor
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-production-supersecretkey-256bit}
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRE_MINUTES: 60
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-mock}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-+15551234567}
+      SMS_RECIPIENT_NUMBER: ${SMS_RECIPIENT_NUMBER:-+1234567890}
+      ALERT_POLL_INTERVAL_SECONDS: 30
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  # ── Monitoring Agent ───────────────────────────────────────────────────
+  agent:
+    build: ./agent
+    container_name: sm-agent
+    restart: unless-stopped
+    environment:
+      API_BASE_URL: http://backend:8000/api/v1
+      SERVER_ID: 0
+      COLLECT_INTERVAL: 10
+      REGISTER_ON_START: "true"
+      API_USERNAME: admin
+      API_PASSWORD: admin123
+    depends_on:
+      - backend
+
+  # ── React Frontend ────────────────────────────────────────────────────
+  frontend:
+    build: ./frontend
+    container_name: sm-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:

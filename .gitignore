@@ -1,0 +1,42 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+build/
+
+# Environment (NEVER commit real secrets)
+.env
+.env.local
+.env.*.local
+backend/.env
+agent/.env
+
+# Docker
+mysql_data/
+
+# Logs
+*.log
+
+# IDE
+*.iml
+.project
+.classpath
+
+# Package locks (optional — remove this line if you want to commit them)
+# package-lock.json

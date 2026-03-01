@@ -1,0 +1,17 @@
+# ===========================================================
+# Server Monitoring System – Backend
+# ===========================================================
+
+[project]
+name = "server-monitor-backend"
+version = "1.0.0"
+description = "Database-centric server monitoring API"
+requires-python = ">=3.11"
+
+[tool.poetry]
+name = "server-monitor-backend"
+version = "1.0.0"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
