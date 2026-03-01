@@ -6,24 +6,65 @@ A **production-style, database-centric** full-stack server monitoring platform b
 
 ## Architecture Overview
 
-```
-  psutil metrics     REST/WS  
-  Monitoring      FastAPI           React     
-    Agent       POST /metrics       Backend                   Dashboard   
-  (Python)                         (thin layer)               (Vite)      
-                              
-                                          
-                                           Stored Procedures / Triggers
-                                          
-                                   
-                                       MySQL 8    
-                                     (core logic) 
-                                                  
-                                     Triggers    
-                                     Procedures  
-                                     Partitions  
-                                     Indexes     
-                                   
+```mermaid
+flowchart TD
+    subgraph AGENT["🖥️ Monitoring Agent (Python / psutil)"]
+        A1[Collect CPU · RAM · Disk every 10 s]
+    end
+
+    subgraph BACKEND["⚙️ FastAPI Backend  •  port 8000"]
+        B1[REST API\n/api/v1/...]
+        B2[WebSocket\n/ws/metrics]
+        B3[Alert Poller\nbackground task · 30 s]
+    end
+
+    subgraph DB["🗄️ MySQL 8 — Core Logic Layer"]
+        D1[Triggers\nAFTER INSERT · AFTER UPDATE]
+        D2[Stored Procedures\n13 procedures]
+        D3[Tables\n9 tables · partitioned · indexed]
+        D4[(Metrics\nCPU · RAM · Disk)]
+        D5[(Alerts\nPENDING → SENT)]
+        D6[(SMSLogs · EmailLogs\nAuditLogs)]
+    end
+
+    subgraph NOTIFY["📣 Notification Channels"]
+        N1[Twilio SMS]
+        N2[SendGrid Email]
+    end
+
+    subgraph FRONTEND["🌐 React Dashboard  •  port 3000"]
+        F1[Live Gauges\nWebSocket SVG rings]
+        F2[Metric History\narea charts · 1h–7d]
+        F3[Uptime Chart\nhourly bar chart]
+        F4[Log Viewer\npaginated · 4 tabs]
+        F5[Alert Table\nresolve in-place]
+    end
+
+    A1 -->|POST /metrics| B1
+    B1 -->|INSERT| D4
+    D4 --> D1
+    D1 -->|threshold exceeded\n+ 5-min cooldown| D5
+    D3 --- D4
+    D3 --- D5
+    D3 --- D6
+    D2 <-->|CALL proc| B1
+    B3 -->|GetPendingAlerts| D2
+    B3 -->|MarkAlertSent| D2
+    B3 --> N1
+    B3 --> N2
+    N1 -->|LogSMS| D6
+    N2 -->|LogEmail| D6
+    B2 -->|broadcast every 3 s| F1
+    B1 <-->|HTTP + JWT| F2
+    B1 <-->|HTTP + JWT| F3
+    B1 <-->|HTTP + JWT| F4
+    B1 <-->|HTTP + JWT| F5
+
+    style AGENT fill:#1e293b,stroke:#3b82f6,color:#e2e8f0
+    style BACKEND fill:#1e293b,stroke:#6366f1,color:#e2e8f0
+    style DB fill:#1e293b,stroke:#10b981,color:#e2e8f0
+    style NOTIFY fill:#1e293b,stroke:#f59e0b,color:#e2e8f0
+    style FRONTEND fill:#1e293b,stroke:#ec4899,color:#e2e8f0
 ```
 
 ### Database-Centric Design
@@ -254,22 +295,31 @@ Services available at:
 
 ## Alert Flow
 
-```
-Agent POSTs metric
-       
-       
-MySQL AFTER INSERT trigger on Metrics
-       
-        Threshold exceeded AND no alert in last 5 min?
-                YES  INSERT into Alerts (status = PENDING)
-       
-       
-Background poller (runs every 30 s)
-       
-        GetPendingAlerts()     fetch CRITICAL PENDING rows
-        send_alert_email()     SendGrid  LogEmail()
-        poll_and_send()        Twilio SMS  LogSMS()
-        MarkAlertSent()        status = SENT
+```mermaid
+sequenceDiagram
+    participant Agent
+    participant FastAPI
+    participant MySQL
+    participant Poller as Alert Poller
+    participant Twilio
+    participant SendGrid
+
+    Agent->>FastAPI: POST /metrics {cpu, ram, disk}
+    FastAPI->>MySQL: INSERT INTO Metrics
+    MySQL->>MySQL: AFTER INSERT trigger fires
+    alt threshold exceeded AND no alert in last 5 min
+        MySQL->>MySQL: INSERT INTO Alerts (PENDING)
+    end
+
+    loop every 30 seconds
+        Poller->>MySQL: CALL GetPendingAlerts()
+        MySQL-->>Poller: CRITICAL PENDING rows
+        Poller->>SendGrid: send_alert_email()
+        SendGrid-->>MySQL: CALL LogEmail()
+        Poller->>Twilio: send_sms()
+        Twilio-->>MySQL: CALL LogSMS()
+        Poller->>MySQL: CALL MarkAlertSent()
+    end
 ```
 
 ---
